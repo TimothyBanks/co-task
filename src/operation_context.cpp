@@ -9,6 +9,8 @@ struct operation_context_impl {
     bool one_and_done{false};
     bool run_immediately{false};
     boost::asio::steady_timer timer;
+
+    operation_context_impl() {}
 };
 
 operation_context make_operation_context() {
@@ -16,6 +18,13 @@ operation_context make_operation_context() {
     context.impl = std::make_shared<operation_context_impl>();
     return context;
 }
+
+operation_context::operation_context() noexcept = default;
+operation_context::operation_context(const operation_context&) noexcept = default;
+operation_context::operation_context(operation_context&&) noexcept = default;
+
+operation_context& operation_context::operator=(const operation_context&) noexcept = default;
+operation_context& operation_context::operator=(operation_context&&) noexcept = default;
 
 operation_context::functor& operation_context::body() {
     if (!impl) {

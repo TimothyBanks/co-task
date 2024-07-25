@@ -11,6 +11,13 @@ struct operation_context_impl;
 struct operation_context {
     using functor = std::function<void(void)>;
 
+    operation_context() noexcept;
+    operation_context(const operation_context&) noexcept;
+    operation_context(operation_context&&) noexcept;
+
+    operation_context& operator=(const operation_context&) noexcept;
+    operation_context& operator=(operation_context&&) noexcept;
+
     functor& body();
     const functor& body() const;
 
