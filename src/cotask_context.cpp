@@ -18,7 +18,25 @@ struct cotask_context_impl : public std::enable_shared_from_this<cotask_context_
   void start() {}
   void stop() {}
 
-  void attach(operation_context& op) {}
+  void attach(operation_context& op) {
+    if (op.timer()) {
+        detach(op);
+    }
+
+    op.timer() = std::make_unique<boost::asio::steady_timer>(io);
+    op.timer()->expires_after(op.interval());
+
+    auto wp = std::weak_ptr<cotask_context_impl>(shared_from_this());
+    op.timer()->async_wait([op, wp](const auto ec){
+        auto cc = wp.lock();
+        if (!cc || cc->status == context_status::stopped) {
+            // Tear down this callback
+        }
+
+
+    });
+  }
+
   void detach(operation_context& op) {}
 
   cotask_context_impl() : work_guard{io.get_executor()} {}

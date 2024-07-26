@@ -6,6 +6,7 @@ namespace cotask {
 struct operation_context_impl
     : public std::enable_shared_from_this<operation_context_impl> {
   std::function<void(void)> body;
+  std::atomic<uint32_t> execution_count = 0;
   std::chrono::milliseconds interval;
   bool one_and_done{false};
   bool run_immediately{false};
@@ -98,18 +99,18 @@ const bool& operation_context::run_immediately() const {
   return impl->run_immediately;
 }
 
-boost::asio::steady_timer& operation_context::timer() {
+std::unique_ptr<boost::asio::steady_timer>& operation_context::timer() {
   if (!impl || !impl->timer) {
     throw cotask_exception{"impl is invalid"};
   }
-  return *(impl->timer);
+  return impl->timer;
 }
 
-const boost::asio::steady_timer& operation_context::timer() const {
+const std::unique_ptr<boost::asio::steady_timer>& operation_context::timer() const {
   if (!impl || !impl->timer) {
     throw cotask_exception{"impl is invalid"};
   }
-  return *(impl->timer);
+  return impl->timer;
 }
 
 }  // namespace cotask

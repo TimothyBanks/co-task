@@ -4,7 +4,7 @@
 
 namespace cotask::threading::this_thread {
 
-thread_local cotask_context main_context;
-thread_local operation_context operation; 
+thread_local cotask_context cc;
+thread_local operation_context oc; 
 
 }
