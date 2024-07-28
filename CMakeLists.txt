@@ -29,3 +29,5 @@ add_library(cotask STATIC
 target_include_directories(cotask PUBLIC 
   ./include
   ./libraries/oneTBB/include)
+
+  add_subdirectory(tests)
