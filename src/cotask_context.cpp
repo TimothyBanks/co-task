@@ -11,22 +11,25 @@
 namespace std {
 template <>
 struct less<cotask::operation_context> {
-  bool operator()(const cotask::operation_context& lhs, const cotask::operation_context& rhs) const {
+  bool operator()(const cotask::operation_context& lhs,
+                  const cotask::operation_context& rhs) const {
     return lhs.address() < rhs.address();
   }
 };
-}
+}  // namespace std
 
 namespace cotask {
 
-struct cotask_context_impl : public std::enable_shared_from_this<cotask_context_impl> {
+struct cotask_context_impl
+    : public std::enable_shared_from_this<cotask_context_impl> {
   std::atomic<context_status> status = context_status::stopped;
   tbb::task_arena arena;
   tbb::task_group group;
   boost::asio::io_context io;
   boost::asio::executor_work_guard<boost::asio::io_context::executor_type>
       work_guard;
-  std::map<operation_context, std::shared_ptr<boost::asio::steady_timer>> timers;
+  std::map<operation_context, std::shared_ptr<boost::asio::steady_timer>>
+      timers;
 
   void start() {
     status = context_status::running;
@@ -53,41 +56,42 @@ struct cotask_context_impl : public std::enable_shared_from_this<cotask_context_
     auto it = timers.find(op);
 
     if (it == std::end(timers)) {
-        attach(op);
-        // attach will re-enter this function.
-        return;
+      attach(op);
+      // attach will re-enter this function.
+      return;
     }
 
     if (op.run_immediately()) {
-      op.run_immediately() = false; 
+      op.run_immediately() = false;
       it->second->expires_after(op.interval());
     } else {
       it->second->expires_after(op.interval());
     }
 
     auto wp = std::weak_ptr<cotask_context_impl>(shared_from_this());
-    it->second->async_wait([op, wp](const auto ec){
-        if (ec == boost::asio::error::operation_aborted{}) {
-          return;
-        }
+    it->second->async_wait([op, wp](const auto ec) {
+      if (ec == boost::asio::error::operation_aborted{}) {
+        return;
+      }
 
-        auto cc = wp.lock();
-        if (!cc || cc->status == context_status::stopped) {
-           return;
-        }
+      auto cc = wp.lock();
+      if (!cc || cc->status == context_status::stopped) {
+        return;
+      }
 
-        // execution_guard should protect against the rescheduling of this task while it is
-        // executing.  We need to create the guard as soon as possible and make sure to pass
-        // it along to the thread pool that will execute the task.
-        auto eg = execution_guard{cc, op};
-        cc->arena.execute([eg = std::move(eg), &cc, &op](){
-          auto eg_ = std::move(eg);
-          cc->group.run([eg_ = std::move(eg_), &cc, &op](){
-            cotask::threading::this_thread::oc = op;
-            cotask::threading::this_thread::cc = cc;
-            op();
-          });
+      // execution_guard should protect against the rescheduling of this task
+      // while it is executing.  We need to create the guard as soon as possible
+      // and make sure to pass it along to the thread pool that will execute the
+      // task.
+      auto eg = execution_guard{cc, op};
+      cc->arena.execute([eg = std::move(eg), &cc, &op]() {
+        auto eg_ = std::move(eg);
+        cc->group.run([eg_ = std::move(eg_), &cc, &op]() {
+          cotask::threading::this_thread::oc = op;
+          cotask::threading::this_thread::cc = cc;
+          op();
         });
+      });
     });
   }
 
@@ -95,7 +99,7 @@ struct cotask_context_impl : public std::enable_shared_from_this<cotask_context_
     auto it = timers.find(op);
 
     if (it != std::end(timers)) {
-        detach(op);
+      detach(op);
     }
 
     auto timer = std::make_shared<boost::asio::steady_timer>(io);
@@ -130,11 +134,13 @@ cotask_context& cotask_context::operator=(const cotask_context&) noexcept =
     default;
 cotask_context& cotask_context::operator=(cotask_context&&) noexcept = default;
 
-cotask_context::cotask_context(std::shared_ptr<cotask_context_impl> impl_) : impl{std::move(impl_)} {}
+cotask_context::cotask_context(std::shared_ptr<cotask_context_impl> impl_)
+    : impl{std::move(impl_)} {}
 
-cotask_context& cotask_context::operator=(std::shared_ptr<cotask_context_impl> impl_) {
-    impl = std::move(impl_);
-    return *this;
+cotask_context& cotask_context::operator=(
+    std::shared_ptr<cotask_context_impl> impl_) {
+  impl = std::move(impl_);
+  return *this;
 }
 
 void cotask_context::start() {
@@ -166,17 +172,17 @@ void cotask_context::detach(operation_context& op) {
 }
 
 std::atomic<context_status>& cotask_context::status() {
-    if (!impl) {
-        throw cotask_exception{"impl is invalid"};
-    }
-    return impl->status;
+  if (!impl) {
+    throw cotask_exception{"impl is invalid"};
+  }
+  return impl->status;
 }
 
 const std::atomic<context_status>& cotask_context::status() const {
-    if (!impl) {
-        throw cotask_exception{"impl is invalid"};
-    }
-    return impl->status;
+  if (!impl) {
+    throw cotask_exception{"impl is invalid"};
+  }
+  return impl->status;
 }
 
 }  // namespace cotask

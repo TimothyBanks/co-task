@@ -5,6 +5,6 @@
 namespace cotask::threading::this_thread {
 
 thread_local cotask_context cc;
-thread_local operation_context oc; 
+thread_local operation_context oc;
 
-}
+}  // namespace cotask::threading::this_thread
