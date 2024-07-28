@@ -35,11 +35,14 @@ operation_context& operation_context::operator=(
 operation_context& operation_context::operator=(operation_context&&) noexcept =
     default;
 
-operation_context::operation_context(std::shared_ptr<operation_context_impl> impl_) : impl{std::move(impl_)} {}
+operation_context::operation_context(
+    std::shared_ptr<operation_context_impl> impl_)
+    : impl{std::move(impl_)} {}
 
-operation_context& operation_context::operator=(std::shared_ptr<operation_context_impl> impl_) {
-    impl = std::move(impl_);
-    return *this;
+operation_context& operation_context::operator=(
+    std::shared_ptr<operation_context_impl> impl_) {
+  impl = std::move(impl_);
+  return *this;
 }
 
 void operation_context::operator()() const {

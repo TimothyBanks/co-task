@@ -15,7 +15,9 @@ struct cotask_exception : public std::exception {
   cotask_exception& operator=(const cotask_exception&) = default;
   cotask_exception& operator=(cotask_exception&&) = default;
 
-  virtual const char* what() const noexcept override { return what_string.c_str(); }
+  virtual const char* what() const noexcept override {
+    return what_string.c_str();
+  }
 };
 
 }  // namespace cotask
