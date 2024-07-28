@@ -3,12 +3,26 @@
 namespace cotask {
 
 struct awaitable {
-    bool await_ready() const noexcept { return false; } 
-    void await_suspend(std::coroutine_handle<> h) const noexcept {
-        // std::cout << "Suspended\n";
-        // h.resume(); 
+    std::coroutine_handle<> handle;
+    bool is_suspended = false;
+
+    bool await_ready() const noexcept {
+        return !is_suspended;
     }
-    void await_resume() const noexcept { std::cout << "Resumed\n"; } /
+
+    void await_suspend(std::coroutine_handle<> h) noexcept {
+        handle = h;
+        is_suspended = true;
+    }
+
+    void await_resume() const noexcept {}
+
+    void resume() {
+        if (is_suspended && handle) {
+            handle.resume();
+            is_suspended = false;
+        }
+    }
 };
 
 }

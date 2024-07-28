@@ -33,9 +33,33 @@ struct task {
         void return_void() requires std::is_void_v<T> {}
 
         task<T> get_return_object() {
-            return task<T>{ std::coroutine_handle<promise<T>>::from_promise(*this) };
+            return task<T>{std::coroutine_handle<promise<T>>::from_promise(*this)};
         }
     };
+
+    task() = default;
+    task(const task&) = default;
+    task(task&&) = default;
+    task(std::coroutine_handle<promise_type> h) : handle{h} {}
+
+    ~task() {
+        if (handle) {
+            handle.destroy();
+        }
+    }
+
+    task& operator=(const task&) = default;
+    task& operator=(task&&) = default;
+
+    void resume() {
+        if (!handle.done()) {
+            handle.resume(); 
+        }
+    }
+
+    bool done() const {
+        return handle.done();
+    }
 };
 
 }
