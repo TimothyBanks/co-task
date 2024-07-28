@@ -98,6 +98,20 @@ const bool& operation_context::run_immediately() const {
   return impl->run_immediately;
 }
 
+std::atomic<uint32_t>& execution_count() {
+  if (!impl) {
+    throw cotask_exception{"impl is invalid"};
+  }
+  return impl->execution_count;
+}
+
+const std::atomic<uint32_t>& execution_count() const {
+  if (!impl) {
+    throw cotask_exception{"impl is invalid"};
+  }
+  return impl->execution_count;
+}
+
 size_t address() const {
   return reinterpret_cast<size_t>(impl.get());
 }

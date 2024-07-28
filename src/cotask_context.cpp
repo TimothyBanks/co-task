@@ -4,6 +4,7 @@
 #include <boost/asio/steady_timer.hpp>
 #include <cotask/cotask_context.hpp>
 #include <cotask/cotask_exception.hpp>
+#include <cotask/execution_guard.hpp>
 
 namespace cotask {
 
@@ -16,8 +17,44 @@ struct cotask_context_impl : public std::enable_shared_from_this<cotask_context_
       work_guard;
   std::unordered_map<size_t, std::shared_ptr<boost::asio::steady_timer>> timers;
 
-  void start() {}
-  void stop() {}
+  void start() {
+    io.run();
+  }
+  
+  void stop() {
+    io.stop();
+    group.wait();
+  }
+
+  void schedule(operation_context& op) {
+    auto it = timers.find(op.address());
+
+    if (it == std::end(timers)) {
+        attach(op);
+        return;
+    }
+
+    if (op.run_immediately()) {
+      op.run_immediately() = false; 
+      it.second->expires_after(op.interval());
+    } else {
+      it.second->expires_after(op.interval());
+    }
+
+    auto wp = std::weak_ptr<cotask_context_impl>(shared_from_this());
+    it.second->async_wait([op, wp](const auto ec){
+        auto cc = wp.lock();
+        if (!cc || cc->status == context_status::stopped) {
+           return;
+        }
+        auto eg = execution_guard{cc, op};
+        cc->arena.execute([eg = std::move(eg), &](){
+          cc->group.run([eg2 = std::move(eg), &](){
+            op.body()();
+          })
+        });
+    });
+  }
 
   void attach(operation_context& op) {
     auto it = timers.find(op.address());
@@ -27,24 +64,8 @@ struct cotask_context_impl : public std::enable_shared_from_this<cotask_context_
     }
 
     auto timer = std::make_shared<boost::asio::steady_timer>(io);
-    timer->expires_after(op.interval());
-
-    auto wp = std::weak_ptr<cotask_context_impl>(shared_from_this());
-    timer->async_wait([op, wp](const auto ec){
-        auto cc = wp.lock();
-        if (!cc || cc->status == context_status::stopped) {
-           return;
-        }
-
-        cc->arena.execute([&](){
-          cc->group.run([&](){
-            
-          })
-        });
-
-    });
-
     timers.emplace(op.address(), std::move(timer));
+    schedule(op);
   }
 
   void detach(operation_context& op) {

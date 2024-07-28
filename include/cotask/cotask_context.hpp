@@ -29,6 +29,7 @@ struct cotask_context {
     void stop();
 
     void attach(operation_context& op);
+    void schedule(operation_context& op);
     void detach(operation_context& op);
 
     std::shared_ptr<cotask_context_impl> impl;

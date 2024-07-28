@@ -32,6 +32,9 @@ struct operation_context {
     bool& run_immediately();
     const bool& run_immediately() const;
 
+    std::atomic<uint32_t>& execution_count();
+    const std::atomic<uint32_t>& execution_count() const;
+
     size_t address() const;
 
     std::shared_ptr<operation_context_impl> impl;
