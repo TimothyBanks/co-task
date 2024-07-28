@@ -6,6 +6,16 @@
 #include <cotask/cotask_exception.hpp>
 #include <cotask/execution_guard.hpp>
 #include <cotask/this_thread.hpp>
+#include <map>
+
+namespace std {
+template <>
+struct less<cotask::operation_context> {
+  bool operator()(const cotask::operation_context& lhs, const cotask::operation_context& rhs) const {
+    return lhs.address() < rhs.address();
+  }
+};
+}
 
 namespace cotask {
 
@@ -16,22 +26,35 @@ struct cotask_context_impl : public std::enable_shared_from_this<cotask_context_
   boost::asio::io_context io;
   boost::asio::executor_work_guard<boost::asio::io_context::executor_type>
       work_guard;
-  std::unordered_map<size_t, std::shared_ptr<boost::asio::steady_timer>> timers;
+  std::map<operation_context, std::shared_ptr<boost::asio::steady_timer>> timers;
 
   void start() {
+    status = context_status::running;
+
+    for (auto it : timers) {
+      schedule(it.first);
+    }
+
     io.run();
   }
 
   void stop() {
+    status = context_status::stopped;
+
+    for (auto it : timers) {
+      it.second->cancel();
+    }
+
     io.stop();
     group.wait();
   }
 
   void schedule(operation_context& op) {
-    auto it = timers.find(op.address());
+    auto it = timers.find(op);
 
     if (it == std::end(timers)) {
         attach(op);
+        // attach will re-enter this function.
         return;
     }
 
@@ -44,36 +67,44 @@ struct cotask_context_impl : public std::enable_shared_from_this<cotask_context_
 
     auto wp = std::weak_ptr<cotask_context_impl>(shared_from_this());
     it->second->async_wait([op, wp](const auto ec){
+        if (ec == boost::asio::error::operation_aborted{}) {
+          return;
+        }
+
         auto cc = wp.lock();
         if (!cc || cc->status == context_status::stopped) {
            return;
         }
+
+        // execution_guard should protect against the rescheduling of this task while it is
+        // executing.  We need to create the guard as soon as possible and make sure to pass
+        // it along to the thread pool that will execute the task.
         auto eg = execution_guard{cc, op};
         cc->arena.execute([eg = std::move(eg), &cc, &op](){
           auto eg_ = std::move(eg);
           cc->group.run([eg_ = std::move(eg_), &cc, &op](){
             cotask::threading::this_thread::oc = op;
             cotask::threading::this_thread::cc = cc;
-            op.body()();
+            op();
           });
         });
     });
   }
 
   void attach(operation_context& op) {
-    auto it = timers.find(op.address());
+    auto it = timers.find(op);
 
     if (it != std::end(timers)) {
         detach(op);
     }
 
     auto timer = std::make_shared<boost::asio::steady_timer>(io);
-    timers.emplace(op.address(), std::move(timer));
+    timers.emplace(op, std::move(timer));
     schedule(op);
   }
 
   void detach(operation_context& op) {
-    auto it = timers.find(op.address());
+    auto it = timers.find(op);
     if (it == std::end(timers)) {
       return;
     }
