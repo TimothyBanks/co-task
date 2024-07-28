@@ -37,24 +37,25 @@ struct cotask_context_impl : public std::enable_shared_from_this<cotask_context_
 
     if (op.run_immediately()) {
       op.run_immediately() = false; 
-      it.second->expires_after(op.interval());
+      it->second->expires_after(op.interval());
     } else {
-      it.second->expires_after(op.interval());
+      it->second->expires_after(op.interval());
     }
 
     auto wp = std::weak_ptr<cotask_context_impl>(shared_from_this());
-    it.second->async_wait([op, wp](const auto ec){
+    it->second->async_wait([op, wp](const auto ec){
         auto cc = wp.lock();
         if (!cc || cc->status == context_status::stopped) {
            return;
         }
         auto eg = execution_guard{cc, op};
-        cc->arena.execute([eg = std::move(eg), &](){
-          cc->group.run([eg2 = std::move(eg), &](){
-            this_thread::oc = oc;
-            this_thread::cc = cc;
+        cc->arena.execute([eg = std::move(eg), &cc, &op](){
+          auto eg_ = std::move(eg);
+          cc->group.run([eg_ = std::move(eg_), &cc, &op](){
+            cotask::threading::this_thread::oc = op;
+            cotask::threading::this_thread::cc = cc;
             op.body()();
-          })
+          });
         });
     });
   }
@@ -77,7 +78,7 @@ struct cotask_context_impl : public std::enable_shared_from_this<cotask_context_
       return;
     }
 
-    it.second->cancel();
+    it->second->cancel();
     timers.erase(it);
   }
 
