@@ -11,6 +11,15 @@ struct operation_context_impl;
 struct operation_context {
     using functor = std::function<void(void)>;
 
+    operation_context() noexcept;
+    operation_context(std::shared_ptr<operation_context_impl> impl);
+    operation_context(const operation_context&) noexcept;
+    operation_context(operation_context&&) noexcept;
+
+    operation_context& operator=(const operation_context&) noexcept;
+    operation_context& operator=(operation_context&&) noexcept;
+    operation_context& operator=(std::shared_ptr<operation_context_impl> impl);
+
     functor& body();
     const functor& body() const;
 
@@ -23,12 +32,15 @@ struct operation_context {
     bool& run_immediately();
     const bool& run_immediately() const;
 
-    boost::asio::steady_timer& timer();
-    const boost::asio::steady_timer& timer() const;
+    std::atomic<uint32_t>& execution_count();
+    const std::atomic<uint32_t>& execution_count() const;
+
+    size_t address() const;
 
     std::shared_ptr<operation_context_impl> impl;
 };
 
-operation_context make_operation_context();
+operation_context make_operation_context(operation_context::functor body, 
+    std::chrono::milliseconds interval, bool one_and_done, bool run_immediately);
 
 }
