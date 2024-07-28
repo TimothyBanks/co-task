@@ -5,6 +5,7 @@
 #include <cotask/cotask_context.hpp>
 #include <cotask/cotask_exception.hpp>
 #include <cotask/execution_guard.hpp>
+#include <cotask/this_thread.hpp>
 
 namespace cotask {
 
@@ -20,7 +21,7 @@ struct cotask_context_impl : public std::enable_shared_from_this<cotask_context_
   void start() {
     io.run();
   }
-  
+
   void stop() {
     io.stop();
     group.wait();
@@ -50,6 +51,8 @@ struct cotask_context_impl : public std::enable_shared_from_this<cotask_context_
         auto eg = execution_guard{cc, op};
         cc->arena.execute([eg = std::move(eg), &](){
           cc->group.run([eg2 = std::move(eg), &](){
+            this_thread::oc = oc;
+            this_thread::cc = cc;
             op.body()();
           })
         });
