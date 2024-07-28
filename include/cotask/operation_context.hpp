@@ -20,6 +20,8 @@ struct operation_context {
     operation_context& operator=(operation_context&&) noexcept;
     operation_context& operator=(std::shared_ptr<operation_context_impl> impl);
 
+    void operator()() const;
+
     functor& body();
     const functor& body() const;
 

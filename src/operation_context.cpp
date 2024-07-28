@@ -42,6 +42,13 @@ operation_context& operation_context::operator=(std::shared_ptr<operation_contex
     return *this;
 }
 
+void operation_context::operator()() const {
+  if (!impl) {
+    throw cotask_exception{"impl is invalid"};
+  }
+  impl->body();
+}
+
 operation_context::functor& operation_context::body() {
   if (!impl) {
     throw cotask_exception{"impl is invalid"};

@@ -21,13 +21,10 @@ set(TBB_TEST OFF)
 set(BUILD_SHARED_LIBS OFF)
 add_subdirectory(libraries/oneTBB)
 
-add_library(cotask STATIC  
-    src/awaitable.cpp 
+add_library(cotask STATIC
     src/cotask_context.cpp 
     src/execution_guard.cpp 
-    src/operation_context.cpp 
-    src/task.cpp 
-    src/this_thread.cpp)
+    src/operation_context.cpp)
 
 target_include_directories(cotask PUBLIC 
   ./include
