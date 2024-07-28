@@ -10,7 +10,6 @@ struct operation_context_impl
   std::chrono::milliseconds interval;
   bool one_and_done{false};
   bool run_immediately{false};
-  std::unique_ptr<boost::asio::steady_timer> timer;
 };
 
 operation_context make_operation_context(operation_context::functor body,
@@ -99,18 +98,8 @@ const bool& operation_context::run_immediately() const {
   return impl->run_immediately;
 }
 
-std::unique_ptr<boost::asio::steady_timer>& operation_context::timer() {
-  if (!impl || !impl->timer) {
-    throw cotask_exception{"impl is invalid"};
-  }
-  return impl->timer;
-}
-
-const std::unique_ptr<boost::asio::steady_timer>& operation_context::timer() const {
-  if (!impl || !impl->timer) {
-    throw cotask_exception{"impl is invalid"};
-  }
-  return impl->timer;
+size_t address() const {
+  return reinterpret_cast<size_t>(impl.get());
 }
 
 }  // namespace cotask

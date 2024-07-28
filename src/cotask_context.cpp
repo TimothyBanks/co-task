@@ -14,30 +14,48 @@ struct cotask_context_impl : public std::enable_shared_from_this<cotask_context_
   boost::asio::io_context io;
   boost::asio::executor_work_guard<boost::asio::io_context::executor_type>
       work_guard;
+  std::unordered_map<size_t, std::shared_ptr<boost::asio::steady_timer>> timers;
 
   void start() {}
   void stop() {}
 
   void attach(operation_context& op) {
-    if (op.timer()) {
+    auto it = timers.find(op.address());
+
+    if (it != std::end(timers)) {
         detach(op);
     }
 
-    op.timer() = std::make_unique<boost::asio::steady_timer>(io);
-    op.timer()->expires_after(op.interval());
+    auto timer = std::make_shared<boost::asio::steady_timer>(io);
+    timer->expires_after(op.interval());
 
     auto wp = std::weak_ptr<cotask_context_impl>(shared_from_this());
-    op.timer()->async_wait([op, wp](const auto ec){
+    timer->async_wait([op, wp](const auto ec){
         auto cc = wp.lock();
         if (!cc || cc->status == context_status::stopped) {
-            // Tear down this callback
+           return;
         }
 
+        cc->arena.execute([&](){
+          cc->group.run([&](){
+            
+          })
+        });
 
     });
+
+    timers.emplace(op.address(), std::move(timer));
   }
 
-  void detach(operation_context& op) {}
+  void detach(operation_context& op) {
+    auto it = timers.find(op.address());
+    if (it == std::end(timers)) {
+      return;
+    }
+
+    it.second->cancel();
+    timers.erase(it);
+  }
 
   cotask_context_impl() : work_guard{io.get_executor()} {}
 };
