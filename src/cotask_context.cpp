@@ -89,9 +89,12 @@ struct cotask_context_impl
       // while it is executing.  We need to create the guard as soon as possible
       // and make sure to pass it along to the thread pool that will execute the
       // task.
-      auto eg = execution_guard{cc, op};
-      cc->arena.execute([eg = std::move(eg), &cc, &op]() {
-        cc->group.run([eg = std::move(const_cast<execution_guard&>(eg)), &cc, &op]() {
+      cc->arena.execute([cc, op]() {
+        cc->group.run([cc, op]() {
+         if (op.execution_count()) {
+           return;
+         }
+         auto eg = execution_guard{cc, op};
          cotask::threading::this_thread::oc = op;
          cotask::threading::this_thread::cc = cc;
          op();
@@ -167,6 +170,13 @@ void cotask_context::attach(operation_context& op) {
     throw cotask_exception{"impl is invalid"};
   }
   return impl->attach(op);
+}
+
+void cotask_context::schedule(operation_context& op) {
+  if (!impl) {
+    throw cotask_exception{"impl is invalid"};
+  }
+  return impl->schedule(op);
 }
 
 void cotask_context::detach(operation_context& op) {
