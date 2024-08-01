@@ -1,4 +1,5 @@
-#include <tbb/tbb.h>
+#include <tbb/task_arena.h>
+#include <tbb/task_group.h>
 #include <boost/asio/executor_work_guard.hpp>
 #include <boost/asio/io_context.hpp>
 #include <boost/asio/steady_timer.hpp>
@@ -34,8 +35,13 @@ struct cotask_context_impl
   void start() {
     status = context_status::running;
 
-    for (auto it : timers) {
-      schedule(it.first);
+    for (auto t : timers) {
+      // Normally don't want a non const reference to a key.
+      // But in this case, modifications to the key instance
+      // will NOT affect the ordering within the map as the
+      // the map works off the PIMPL address which will never change.
+      auto& oc = const_cast<operation_context&>(t.first);
+      schedule(oc);
     }
 
     io.run();
@@ -70,7 +76,7 @@ struct cotask_context_impl
 
     auto wp = std::weak_ptr<cotask_context_impl>(shared_from_this());
     it->second->async_wait([op, wp](const auto ec) {
-      if (ec == boost::asio::error::operation_aborted{}) {
+      if (ec == boost::asio::error::operation_aborted) {
         return;
       }
 
@@ -85,11 +91,10 @@ struct cotask_context_impl
       // task.
       auto eg = execution_guard{cc, op};
       cc->arena.execute([eg = std::move(eg), &cc, &op]() {
-        auto eg_ = std::move(eg);
-        cc->group.run([eg_ = std::move(eg_), &cc, &op]() {
-          cotask::threading::this_thread::oc = op;
-          cotask::threading::this_thread::cc = cc;
-          op();
+        cc->group.run([eg = std::move(const_cast<execution_guard&>(eg)), &cc, &op]() {
+         cotask::threading::this_thread::oc = op;
+         cotask::threading::this_thread::cc = cc;
+         op();
         });
       });
     });
