@@ -8,18 +8,25 @@ set(CMAKE_LINKER "/usr/bin/llvm-ld")
 set(CMAKE_NM "/usr/bin/llvm-nm")
 set(CMAKE_OBJDUMP "/usr/bin/llvm-objdump")
 set(CMAKE_RANLIB "/usr/bin/llvm-ranlib")
-set(CMAKE_CXX_STANDARD 20)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-find_package(Boost 1.85.0)
-if(Boost_FOUND)
-  include_directories(${Boost_INCLUDE_DIRS})
+if (CMAKE_CXX_STANDARD LESS 20)
+    message(FATAL_ERROR "C++20 is not supported by the compiler")
 endif()
 
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(TBB_TEST OFF)
 set(BUILD_SHARED_LIBS OFF)
 add_subdirectory(libraries/oneTBB)
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+#find_package(Boost 1.85.0)
+find_package(Boost)
+if(Boost_FOUND)
+  include_directories(${Boost_INCLUDE_DIRS})
+endif()
 
 add_library(cotask STATIC
     src/cotask_context.cpp 
@@ -29,5 +36,7 @@ add_library(cotask STATIC
 target_include_directories(cotask PUBLIC 
   ./include
   ./libraries/oneTBB/include)
+
+  target_link_libraries(cotask tbb)
 
   add_subdirectory(tests)
