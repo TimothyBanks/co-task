@@ -1,6 +1,7 @@
 #pragma once
 #include <boost/asio.hpp>
 #include <chrono>
+#include <cotask/any_task.hpp>
 #include <functional>
 #include <memory>
 
@@ -9,7 +10,7 @@ namespace cotask {
 struct operation_context_impl;
 
 struct operation_context {
-  using functor = std::function<void(void)>;
+  using functor = std::function<any_task(void)>;
 
   operation_context() noexcept;
   operation_context(std::shared_ptr<operation_context_impl> impl);
@@ -25,6 +26,9 @@ struct operation_context {
   functor& body();
   const functor& body() const;
 
+  any_task& task();
+  const any_task& task() const;
+
   std::chrono::milliseconds& interval();
   const std::chrono::milliseconds& interval() const;
 
@@ -39,7 +43,7 @@ struct operation_context {
 
   size_t address() const;
 
-  std::shared_ptr<operation_context_impl> impl;
+  mutable std::shared_ptr<operation_context_impl> impl;
 };
 
 operation_context make_operation_context(operation_context::functor body,
