@@ -1,37 +1,47 @@
 #pragma once
 #include <coroutine>
+#include <optional>
 
 namespace cotask {
 
+template <typename T, typename Enabled = void>
+struct basic_promise_type;
+
+template <typename T>
+struct basic_promise_type<T, std::enable_if_t<std::is_void_v<T>>> {
+  std::exception_ptr exception;
+  void return_void() {}
+};
+
+template <typename T>
+struct basic_promise_type<T, std::enable_if_t<!std::is_void_v<T>>> {
+  std::exception_ptr exception;
+  std::optional<T> value;
+
+  T result() { return value.value_or(T{}); }
+
+  void return_value(T v) { value = std::move(v); }
+};
+
 template <typename T>
 struct task {
-  template <typename T>
-  struct promise {
-    std::optional<std::conditonal_t<std::is_void_v<T>, bool, T>> value;
-    std::exception_ptr exception;
-
+  struct promise_type : basic_promise_type<T> {
     std::suspend_always initial_suspend() { return {}; }
 
-    std::suspend_never final_suspend() noexcept { return {}; }
+    std::suspend_always final_suspend() noexcept { return {}; }
 
-    void unhandled_exception() { exception = std::current_exception(); }
-
-    T result() requires(!std::is_void_v<T>) { return value.value_or(T{}); }
-
-    void return_value(T v) requires(!std::is_void_v<T>) {
-      value = std::move(v);
-    }
-
-    void return_void() requires std::is_void_v<T> {}
+    void unhandled_exception() { this->exception = std::current_exception(); }
 
     task<T> get_return_object() {
-      return task<T>{std::coroutine_handle<promise<T>>::from_promise(*this)};
+      return task<T>{std::coroutine_handle<promise_type>::from_promise(*this)};
     }
   };
 
+  std::coroutine_handle<promise_type> handle{nullptr};
+
   task() = default;
-  task(const task&) = default;
-  task(task&&) = default;
+  task(const task&) = delete;
+  task(task&& other) : handle{std::exchange(other.handle, {})} {}
   task(std::coroutine_handle<promise_type> h) : handle{h} {}
 
   ~task() {
@@ -40,13 +50,19 @@ struct task {
     }
   }
 
-  task& operator=(const task&) = default;
-  task& operator=(task&&) = default;
+  task& operator=(const task&) = delete;
+  task& operator=(task&& other) {
+    if (this != &other) {
+      handle = std::exchange(other.handle, {});
+    }
+    return *this;
+  };
 
   void resume() {
-    if (!handle.done()) {
-      handle.resume();
+    if (handle.done()) {
+      return;
     }
+    handle.resume();
   }
 
   bool done() const { return handle.done(); }

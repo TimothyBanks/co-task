@@ -24,6 +24,7 @@ namespace cotask {
 struct cotask_context_impl
     : public std::enable_shared_from_this<cotask_context_impl> {
   std::atomic<context_status> status = context_status::stopped;
+  size_t thread_count{0};
   tbb::task_arena arena;
   tbb::task_group group;
   boost::asio::io_context io;
@@ -31,6 +32,12 @@ struct cotask_context_impl
       work_guard;
   std::map<operation_context, std::shared_ptr<boost::asio::steady_timer>>
       timers;
+
+  cotask_context_impl(
+      size_t thread_count_ = std::thread::hardware_concurrency())
+      : thread_count{thread_count_},
+        arena{static_cast<int32_t>(thread_count_)},
+        work_guard{io.get_executor()} {}
 
   void start() {
     status = context_status::running;
@@ -91,13 +98,13 @@ struct cotask_context_impl
       // task.
       cc->arena.execute([cc, op]() {
         cc->group.run([cc, op]() {
-         if (op.execution_count()) {
-           return;
-         }
-         auto eg = execution_guard{cc, op};
-         cotask::threading::this_thread::oc = op;
-         cotask::threading::this_thread::cc = cc;
-         op();
+          if (op.execution_count()) {
+            return;
+          }
+          auto eg = execution_guard{cc, op};
+          cotask::threading::this_thread::oc = op;
+          cotask::threading::this_thread::cc = cc;
+          op();
         });
       });
     });
@@ -124,8 +131,6 @@ struct cotask_context_impl
     it->second->cancel();
     timers.erase(it);
   }
-
-  cotask_context_impl() : work_guard{io.get_executor()} {}
 };
 
 cotask_context make_cotask_context() {

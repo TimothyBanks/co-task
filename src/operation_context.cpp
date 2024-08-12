@@ -5,7 +5,8 @@ namespace cotask {
 
 struct operation_context_impl
     : public std::enable_shared_from_this<operation_context_impl> {
-  std::function<void(void)> body;
+  mutable operation_context::functor body;
+  mutable any_task my_task;
   std::atomic<uint32_t> execution_count = 0;
   std::chrono::milliseconds interval;
   bool one_and_done{false};
@@ -49,7 +50,11 @@ void operation_context::operator()() const {
   if (!impl) {
     throw cotask_exception{"impl is invalid"};
   }
-  impl->body();
+
+  if (impl->my_task.done()) {
+    impl->my_task = impl->body();
+  }
+  impl->my_task.resume();
 }
 
 operation_context::functor& operation_context::body() {
@@ -64,6 +69,20 @@ const operation_context::functor& operation_context::body() const {
     throw cotask_exception{"impl is invalid"};
   }
   return impl->body;
+}
+
+any_task& operation_context::task() {
+  if (!impl) {
+    throw cotask_exception{"impl is invalid"};
+  }
+  return impl->my_task;
+}
+
+const any_task& operation_context::task() const {
+  if (!impl) {
+    throw cotask_exception{"impl is invalid"};
+  }
+  return impl->my_task;
 }
 
 std::chrono::milliseconds& operation_context::interval() {
