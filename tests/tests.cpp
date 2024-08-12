@@ -10,7 +10,7 @@
 #include <mutex>
 #include <thread>
 
-struct acquire_lock_awaitable {
+struct acquire_lock_awaitable : cotask::basic_awaitable {
   std::unique_lock<std::mutex> guard;
   std::function<void(void)> reset_promise;
   std::coroutine_handle<> parent;
@@ -28,12 +28,11 @@ struct acquire_lock_awaitable {
 
   template <typename T>
   void await_suspend(std::coroutine_handle<T> h) {
-    h.promise().ready = [&]() { return guard.try_lock(); };
-    reset_promise = [h]() { h.promise().ready = []() { return true; }; };
+    set_ready_functor(h, [&]() { return guard.try_lock(); });
     parent = h;
   }
 
-  void await_resume() { reset_promise(); }
+  void await_resume() { reset_handle(); }
 };
 
 cotask::task<void> foobar() {

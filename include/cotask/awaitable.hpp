@@ -4,7 +4,24 @@
 
 namespace cotask {
 
-struct awaitable {
+struct basic_awaitable {
+  using ready_functor = std::function<bool(void)>;
+  using reset_functor = std::function<void(void)>;
+
+  reset_functor reset;
+
+  template <typename T>
+  void set_ready_functor(std::coroutine_handle<T> handle, ready_functor functor) {
+    handle.promise().ready = std::move(functor);
+    reset = [handle]() { handle.promise().ready = []() { return true; }; };
+  }
+
+  void reset_handle() {
+    reset();
+  }
+};
+
+struct awaitable : basic_awaitable {
   std::coroutine_handle<> handle;
   std::coroutine_handle<> parent;
   std::function<void(void)> reset_promise;
@@ -31,17 +48,16 @@ struct awaitable {
 
   template <typename T>
   void await_suspend(std::coroutine_handle<T> h) {
-    h.promise().ready = [&]() {
+    set_ready_functor(h, [&]() {
       if (handle && !handle.done()) {
         handle.resume();
       }
       return handle.done();
-    };
-    reset_promise = [h]() { h.promise().ready = []() { return true; }; };
+    });
     parent = h;
   }
 
-  void await_resume() noexcept { reset_promise(); }
+  void await_resume() noexcept { reset_handle(); }
 };
 
 }  // namespace cotask
