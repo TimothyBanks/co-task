@@ -1,5 +1,6 @@
 #pragma once
 #include <coroutine>
+#include <functional>
 #include <optional>
 
 namespace cotask {
@@ -26,6 +27,8 @@ struct basic_promise_type<T, std::enable_if_t<!std::is_void_v<T>>> {
 template <typename T>
 struct task {
   struct promise_type : basic_promise_type<T> {
+    std::function<bool(void)> ready = []() { return true; };
+
     std::suspend_always initial_suspend() { return {}; }
 
     std::suspend_always final_suspend() noexcept { return {}; }
@@ -60,6 +63,9 @@ struct task {
 
   void resume() {
     if (handle.done()) {
+      return;
+    }
+    if (!handle.promise().ready()) {
       return;
     }
     handle.resume();

@@ -1,27 +1,47 @@
 #pragma once
 #include <coroutine>
+#include <cotask/task.hpp>
 
 namespace cotask {
 
 struct awaitable {
   std::coroutine_handle<> handle;
-  bool is_suspended = false;
+  std::coroutine_handle<> parent;
+  std::function<void(void)> reset_promise;
 
-  bool await_ready() const noexcept { return !is_suspended; }
+  awaitable() = default;
+  awaitable(const awaitable&) = default;
+  awaitable(awaitable&&) = default;
 
-  void await_suspend(std::coroutine_handle<> h) noexcept {
-    handle = h;
-    is_suspended = true;
-  }
+  template <typename T>
+  awaitable(const task<T>& t) : handle{t.handle} {}
 
-  void await_resume() const noexcept {}
+  awaitable& operator=(const awaitable&) = default;
+  awaitable& operator=(awaitable&&) = default;
 
-  void resume() {
-    if (is_suspended && handle) {
-      handle.resume();
-      is_suspended = false;
+  bool await_ready() const {
+    if (!handle) {
+      return true;
     }
+    if (!handle.done()) {
+      handle.resume();
+    }
+    return handle.done();
   }
+
+  template <typename T>
+  void await_suspend(std::coroutine_handle<T> h) {
+    h.promise().ready = [&]() {
+      if (handle && !handle.done()) {
+        handle.resume();
+      }
+      return handle.done();
+    };
+    reset_promise = [h]() { h.promise().ready = []() { return true; }; };
+    parent = h;
+  }
+
+  void await_resume() noexcept { reset_promise(); }
 };
 
 }  // namespace cotask
