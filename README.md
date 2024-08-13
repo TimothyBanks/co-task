@@ -18,12 +18,16 @@ struct task_awaitable : cotask::basic_awaitable {
   task_awaitable(task_awaitable&&) = default;
 
   template <typename Task_functor>
-  task_awaitable(Task_functor f) {
-    op = cotask::make_operation_context([f = std::move(f), this]() -> cotask::task<void> {
-        f();
-        completed = true;
-        co_return;
-    }, std::chrono::milliseconds{1500}, true, true);
+  task_awaitable(Task_functor f)
+      : op{cotask::make_operation_context(
+            [f = std::move(f), this]() -> cotask::task<void> {
+              f();
+              completed = true;
+              co_return;
+            },
+            std::chrono::milliseconds{1500},
+            true,
+            true)} {
     cc.attach(op);
   }
 
