@@ -22,12 +22,16 @@ struct task_awaitable : cotask::basic_awaitable {
   task_awaitable(task_awaitable&&) = default;
 
   template <typename Task_functor>
-  task_awaitable(Task_functor f) {
-    op = cotask::make_operation_context([f = std::move(f), this]() -> cotask::task<void> {
-        f();
-        completed = true;
-        co_return;
-    }, std::chrono::milliseconds{1500}, true, true);
+  task_awaitable(Task_functor f)
+      : op{cotask::make_operation_context(
+            [f = std::move(f), this]() -> cotask::task<void> {
+              f();
+              completed = true;
+              co_return;
+            },
+            std::chrono::milliseconds{1500},
+            true,
+            true)} {
     cc.attach(op);
   }
 
@@ -54,8 +58,8 @@ struct async_awaitable : cotask::basic_awaitable {
   template <typename Thread_functor>
   async_awaitable(Thread_functor f) {
     auto h = std::async(std::launch::async, [f = std::move(f), this]() {
-        f();
-        completed = true;
+      f();
+      completed = true;
     });
   }
 
@@ -86,7 +90,8 @@ struct acquire_lock_awaitable : cotask::basic_awaitable {
 
   bool await_ready() {
     auto ready = guard.try_lock();
-    // std::cout << "[" << std::this_thread::get_id() << "] Lock acquired == " << ready << std::endl;
+    // std::cout << "[" << std::this_thread::get_id() << "] Lock acquired == "
+    // << ready << std::endl;
     return ready;
   }
 
@@ -94,7 +99,8 @@ struct acquire_lock_awaitable : cotask::basic_awaitable {
   void await_suspend(std::coroutine_handle<T> h) {
     set_awaiting_handle(h, [&]() {
       auto ready = guard.try_lock();
-      // std::cout << "[" << std::this_thread::get_id() << "] Lock acquired == " << ready << std::endl;
+      // std::cout << "[" << std::this_thread::get_id() << "] Lock acquired == "
+      // << ready << std::endl;
       return ready;
     });
   }
@@ -103,9 +109,11 @@ struct acquire_lock_awaitable : cotask::basic_awaitable {
 };
 
 cotask::task<void> foobar(const std::string& id) {
-  std::cout << "[" << id << ", " << std::this_thread::get_id() << "] foobar invoked." << std::endl;
+  std::cout << "[" << id << ", " << std::this_thread::get_id()
+            << "] foobar invoked." << std::endl;
   co_await std::suspend_always{};
-  std::cout << "[" << id << ", " << std::this_thread::get_id() << "] foobar after suspension." << std::endl;
+  std::cout << "[" << id << ", " << std::this_thread::get_id()
+            << "] foobar after suspension." << std::endl;
   co_return;
 }
 
@@ -116,20 +124,24 @@ std::function<cotask::any_task(void)> make_task(
     auto lock_awaitable = acquire_lock_awaitable{
         std::unique_lock<std::mutex>{*write_mutex, std::defer_lock}};
     co_await lock_awaitable;
-    std::cout << "[" << id << ", " << std::this_thread::get_id() << "] Lock acquired. Going to sleep." << std::endl;
+    std::cout << "[" << id << ", " << std::this_thread::get_id()
+              << "] Lock acquired. Going to sleep." << std::endl;
     std::this_thread::sleep_for(timeout / 2);
 
     auto tid = std::this_thread::get_id();
     auto async_await = async_awaitable{[&] {
-      std::cout << "[" << id << ", " << std::this_thread::get_id() << "] Ran asynchronous operation. " << std::endl;
+      std::cout << "[" << id << ", " << std::this_thread::get_id()
+                << "] Ran asynchronous operation. " << std::endl;
     }};
     co_await async_await;
 
     auto fb = foobar(id);
     co_await cotask::awaitable{fb};
-    std::cout << "[" << id << ", " << std::this_thread::get_id() << "] Coming back after first suspension " << std::endl;
+    std::cout << "[" << id << ", " << std::this_thread::get_id()
+              << "] Coming back after first suspension " << std::endl;
     co_await std::suspend_always{};
-    std::cout << "[" << id << ", " << std::this_thread::get_id() << "] Coming back after last suspension " << std::endl;
+    std::cout << "[" << id << ", " << std::this_thread::get_id()
+              << "] Coming back after last suspension " << std::endl;
     co_return;
   };
 }
