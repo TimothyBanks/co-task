@@ -8,22 +8,26 @@ struct basic_awaitable {
   using ready_functor = std::function<bool(void)>;
   using reset_functor = std::function<void(void)>;
 
-  reset_functor reset;
+  reset_functor reset = [](){};
+  std::coroutine_handle<> awaiting_handle;
 
   template <typename T>
-  void set_ready_functor(std::coroutine_handle<T> handle, ready_functor functor) {
+  void set_awaiting_handle(std::coroutine_handle<T> handle, ready_functor functor) {
     handle.promise().ready = std::move(functor);
     reset = [handle]() { handle.promise().ready = []() { return true; }; };
+    awaiting_handle = handle;
   }
 
   void reset_handle() {
+    if (!reset) {
+      return;
+    }
     reset();
   }
 };
 
 struct awaitable : basic_awaitable {
   std::coroutine_handle<> handle;
-  std::coroutine_handle<> parent;
 
   awaitable() = default;
   awaitable(const awaitable&) = default;
@@ -47,13 +51,12 @@ struct awaitable : basic_awaitable {
 
   template <typename T>
   void await_suspend(std::coroutine_handle<T> h) {
-    set_ready_functor(h, [&]() {
+    set_awaiting_handle(h, [&]() {
       if (handle && !handle.done()) {
         handle.resume();
       }
       return handle.done();
     });
-    parent = h;
   }
 
   void await_resume() noexcept { reset_handle(); }

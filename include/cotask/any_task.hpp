@@ -4,6 +4,9 @@
 
 namespace cotask {
 
+///
+/// \brief A type erasure type for task templates.
+///
 struct any_task {
  private:
   struct task_interface {

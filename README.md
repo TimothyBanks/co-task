@@ -6,10 +6,70 @@ This SDK makes use of oneTBB for task based programming and Boost ASIO for async
 As usual a code example is a good way to demonstrate this idea.  The main point to identify here is the blocking call when trying to acquire a mutex on every task invocation.  The mutex acquisition is sitting within an awaitable that will be polled periodically to see if the lock can actually be acquired.
 
 ```
+cotask::cotask_context cc = cotask::make_cotask_context();
+std::unique_ptr<std::mutex> write_mutex = std::make_unique<std::mutex>();
+
+struct task_awaitable : cotask::basic_awaitable {
+  cotask::operation_context op;
+  bool completed{false};
+
+  task_awaitable() = delete;
+  task_awaitable(const task_awaitable&) = delete;
+  task_awaitable(task_awaitable&&) = default;
+
+  template <typename Task_functor>
+  task_awaitable(Task_functor f) {
+    op = cotask::make_operation_context([f = std::move(f), this]() -> cotask::task<void> {
+        f();
+        completed = true;
+        co_return;
+    }, std::chrono::milliseconds{1500}, true, true);
+    cc.attach(op);
+  }
+
+  task_awaitable& operator=(const task_awaitable&) = delete;
+  task_awaitable& operator=(task_awaitable&&) = default;
+
+  bool await_ready() { return completed; }
+
+  template <typename T>
+  void await_suspend(std::coroutine_handle<T> h) {
+    set_awaiting_handle(h, [&]() { return completed; });
+  }
+
+  void await_resume() { reset_handle(); }
+};
+
+struct async_awaitable : cotask::basic_awaitable {
+  bool completed{false};
+
+  async_awaitable() = delete;
+  async_awaitable(const async_awaitable&) = delete;
+  async_awaitable(async_awaitable&&) = default;
+
+  template <typename Thread_functor>
+  async_awaitable(Thread_functor f) {
+    auto h = std::async(std::launch::async, [f = std::move(f), this]() {
+        f();
+        completed = true;
+    });
+  }
+
+  async_awaitable& operator=(const async_awaitable&) = delete;
+  async_awaitable& operator=(async_awaitable&&) = default;
+
+  bool await_ready() { return completed; }
+
+  template <typename T>
+  void await_suspend(std::coroutine_handle<T> h) {
+    set_awaiting_handle(h, [&]() { return completed; });
+  }
+
+  void await_resume() { reset_handle(); }
+};
+
 struct acquire_lock_awaitable : cotask::basic_awaitable {
   std::unique_lock<std::mutex> guard;
-  std::function<void(void)> reset_promise;
-  std::coroutine_handle<> parent;
 
   acquire_lock_awaitable() = delete;
   acquire_lock_awaitable(const acquire_lock_awaitable&) = delete;
@@ -20,45 +80,52 @@ struct acquire_lock_awaitable : cotask::basic_awaitable {
   acquire_lock_awaitable& operator=(const acquire_lock_awaitable&) = delete;
   acquire_lock_awaitable& operator=(acquire_lock_awaitable&&) = default;
 
-  bool await_ready() { return guard.try_lock(); }
+  bool await_ready() {
+    auto ready = guard.try_lock();
+    // std::cout << "[" << std::this_thread::get_id() << "] Lock acquired == " << ready << std::endl;
+    return ready;
+  }
 
   template <typename T>
   void await_suspend(std::coroutine_handle<T> h) {
-    set_ready_functor(h, [&]() { return guard.try_lock(); });
-    parent = h;
+    set_awaiting_handle(h, [&]() {
+      auto ready = guard.try_lock();
+      // std::cout << "[" << std::this_thread::get_id() << "] Lock acquired == " << ready << std::endl;
+      return ready;
+    });
   }
 
   void await_resume() { reset_handle(); }
 };
 
-cotask::task<void> foobar() {
-  std::cout << "foobar is invoked from thread " << std::this_thread::get_id()
-            << std::endl;
+cotask::task<void> foobar(const std::string& id) {
+  std::cout << "[" << id << ", " << std::this_thread::get_id() << "] foobar invoked." << std::endl;
   co_await std::suspend_always{};
-  std::cout << "foobar is is back from suspension from thread "
-            << std::this_thread::get_id() << std::endl;
+  std::cout << "[" << id << ", " << std::this_thread::get_id() << "] foobar after suspension." << std::endl;
   co_return;
 }
-
-std::mutex write_mutex;
 
 std::function<cotask::any_task(void)> make_task(
     std::string id,
     std::chrono::milliseconds timeout) {
   return [id = std::move(id), timeout]() -> cotask::task<void> {
     auto lock_awaitable = acquire_lock_awaitable{
-        std::unique_lock<std::mutex>{write_mutex, std::defer_lock}};
+        std::unique_lock<std::mutex>{*write_mutex, std::defer_lock}};
     co_await lock_awaitable;
-    std::this_thread::sleep_for(timeout);
-    std::cout << "hello from me " << id << " thread id "
-              << std::this_thread::get_id() << std::endl;
-    auto fb = foobar();
+    std::cout << "[" << id << ", " << std::this_thread::get_id() << "] Lock acquired. Going to sleep." << std::endl;
+    std::this_thread::sleep_for(timeout / 2);
+
+    auto tid = std::this_thread::get_id();
+    auto async_await = async_awaitable{[&] {
+      std::cout << "[" << id << ", " << std::this_thread::get_id() << "] Ran asynchronous operation. " << std::endl;
+    }};
+    co_await async_await;
+
+    auto fb = foobar(id);
     co_await cotask::awaitable{fb};
-    std::cout << "hello from me after suspension " << id << " thread id "
-              << std::this_thread::get_id() << std::endl;
+    std::cout << "[" << id << ", " << std::this_thread::get_id() << "] Coming back after first suspension " << std::endl;
     co_await std::suspend_always{};
-    std::cout << "hello from me after another suspension " << id
-              << " thread id " << std::this_thread::get_id() << std::endl;
+    std::cout << "[" << id << ", " << std::this_thread::get_id() << "] Coming back after last suspension " << std::endl;
     co_return;
   };
 }
@@ -87,7 +154,6 @@ BOOST_AUTO_TEST_CASE(cotask_tests) {
           std::chrono::milliseconds{1}, false, false),
   };
 
-  auto cc = cotask::make_cotask_context();
   for (auto& oc : ocs) {
     cc.attach(oc);
   }
