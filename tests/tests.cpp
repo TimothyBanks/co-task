@@ -45,7 +45,6 @@ struct task_awaitable : cotask::basic_awaitable {
 };
 
 struct async_awaitable : cotask::basic_awaitable {
-  // cotask::operation_context op;
   bool completed{false};
 
   async_awaitable() = delete;
@@ -54,12 +53,6 @@ struct async_awaitable : cotask::basic_awaitable {
 
   template <typename Thread_functor>
   async_awaitable(Thread_functor f) {
-    // op = cotask::make_operation_context([f = std::move(f), this]() -> cotask::task<void> {
-    //     f();
-    //     completed = true;
-    //     co_return;
-    // }, std::chrono::milliseconds{1500}, true, true);
-    // cc.attach(op);
     auto h = std::async(std::launch::async, [f = std::move(f), this]() {
         f();
         completed = true;
