@@ -24,7 +24,6 @@ struct basic_awaitable {
 struct awaitable : basic_awaitable {
   std::coroutine_handle<> handle;
   std::coroutine_handle<> parent;
-  std::function<void(void)> reset_promise;
 
   awaitable() = default;
   awaitable(const awaitable&) = default;
