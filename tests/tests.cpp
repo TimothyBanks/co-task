@@ -12,7 +12,6 @@
 
 struct acquire_lock_awaitable : cotask::basic_awaitable {
   std::unique_lock<std::mutex> guard;
-  std::function<void(void)> reset_promise;
   std::coroutine_handle<> parent;
 
   acquire_lock_awaitable() = delete;
