@@ -1,13 +1,6 @@
 cmake_minimum_required (VERSION 3.8)
 project (cotask)
 
-set(CMAKE_C_COMPILER "/usr/bin/clang")
-set(CMAKE_CXX_COMPILER "/usr/bin/clang++")
-set(CMAKE_AR "/usr/bin/llvm-ar")
-set(CMAKE_LINKER "/usr/bin/llvm-ld")
-set(CMAKE_NM "/usr/bin/llvm-nm")
-set(CMAKE_OBJDUMP "/usr/bin/llvm-objdump")
-set(CMAKE_RANLIB "/usr/bin/llvm-ranlib")
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 if (CMAKE_CXX_STANDARD LESS 20)
